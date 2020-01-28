@@ -137,47 +137,32 @@ if __name__ == "__main__":
     try:
 
         # Calibration loop
+        print("Beginning Calibration")
         # time log
         begin_calibration_loop = time.time()
         current_time = time.time()
         # empty lists to store the calibration values
-        calibration_alpha = []
-        calibration_beta = []
         calibration_smoothed_alpha = []
         calibration_smoothed_beta = []
+
         while begin_calibration_loop + CALIBRATION_TIME > current_time:
             smooth_band_powers, band_powers = get_band_powers(
                 inlet, eeg_buffer, filter_state, band_buffer)
-            calibration_alpha.append(band_powers[Band.Alpha])
-            calibration_beta.append(band_powers[Band.Beta])
             calibration_smoothed_alpha.append(smooth_band_powers[Band.Alpha])
             calibration_smoothed_beta.append(smooth_band_powers[Band.Beta])
             current_time = time.time()
 
-        mean_alpha = np.mean(calibration_alpha)
-        print(mean_alpha)
-        mean_smoothed_alpha = np.mean(calibration_smoothed_alpha)
-        print(mean_smoothed_alpha)
-        std_alpha = np.std(calibration_alpha)
-        print(std_alpha)
-        std_smoothed_alpha = np.std(calibration_smoothed_alpha)
-        print(std_smoothed_alpha)
+        score_calibration = np.array(calibration_smoothed_beta) / np.array(calibration_smoothed_alpha)
+        mean_score_calibration = np.mean(score_calibration)
+        std_score_calibration = np.std(score_calibration)
 
-        mean_beta = np.mean(calibration_beta)
-        print(mean_beta)
-        mean_smoothed_beta = np.mean(calibration_smoothed_beta)
-        print(mean_smoothed_beta)
-        std_beta = np.std(calibration_beta)
-        print(std_beta)
-        std_smoothed_beta = np.std(calibration_smoothed_beta)
-        print(std_smoothed_beta)
+        print("End of Calibration")
 
-        sys.exit()
         # The following loop acquires data, computes band powers,
         # and sends OSC neurofeedback metric based on those band powers
         while True:
 
-             smooth_band_powers, band_powers = get_band_powers(
+            smooth_band_powers, band_powers = get_band_powers(
                 inlet, eeg_buffer, filter_state, band_buffer)
 
             # print('Delta: ', band_powers[Band.Delta], ' Theta: ', band_powers[Band.Theta],
@@ -189,6 +174,9 @@ if __name__ == "__main__":
             beta = smooth_band_powers[Band.Beta]
             # Computes the ratio and its sigmoid
             score = beta / alpha
+            score_calibrated = (score-mean_score_calibration)/std_score_calibration
+            print(f"score {score}")
+            print(f"score calibrated {score_calibrated}")
             sig_score = utils.sigmoid(score)
             # Sends the OSC values (they need to be str for Unity)
             send_osc_message(str(score), "score")
