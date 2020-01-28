@@ -17,6 +17,8 @@ import utils  # Utility functions
 from pythonosc import udp_client  # Module for OSC
 
 # Handy little enum to make code more readable
+
+
 class Band:
     Delta = 0
     Theta = 1
@@ -43,6 +45,35 @@ SHIFT_LENGTH = EPOCH_LENGTH - OVERLAP_LENGTH
 # Index of the channel(s) (electrodes) to be used
 # 0 = left ear, 1 = left forehead, 2 = right forehead, 3 = right ear
 INDEX_CHANNEL = [0, 1, 2, 3]
+
+
+def get_band_powers(inlet, eeg_buffer, filter_state, band_buffer):
+    """ 3.1 ACQUIRE DATA """
+    # Obtain EEG data from the LSL stream
+    eeg_data, timestamp = inlet.pull_chunk(
+        timeout=1, max_samples=int(SHIFT_LENGTH * fs))
+
+    # Only keep the channel we're interested in
+    ch_data = np.array(eeg_data)[:, INDEX_CHANNEL]
+    # Update EEG buffer with the new data
+    eeg_buffer, filter_state = utils.update_buffer(
+        eeg_buffer, ch_data, notch=True,
+        filter_state=filter_state)
+
+    """ 3.2 COMPUTE BAND POWERS """
+    # Get newest samples from the buffer
+    data_epoch = utils.get_last_data(eeg_buffer,
+                                     EPOCH_LENGTH * fs)
+
+    # Compute band powers
+    band_powers = utils.compute_band_powers(data_epoch, fs)
+    band_buffer, _ = utils.update_buffer(band_buffer,
+                                         np.asarray([band_powers]))
+    # Compute the average band powers for all epochs in buffer
+    # This helps to smooth out noise
+    smooth_band_powers = np.mean(band_buffer, axis=0)
+
+    return smooth_band_powers
 
 
 if __name__ == "__main__":
@@ -102,30 +133,33 @@ if __name__ == "__main__":
         # and sends OSC neurofeedback metric based on those band powers
         while True:
 
-            """ 3.1 ACQUIRE DATA """
-            # Obtain EEG data from the LSL stream
-            eeg_data, timestamp = inlet.pull_chunk(
-                timeout=1, max_samples=int(SHIFT_LENGTH * fs))
+            # """ 3.1 ACQUIRE DATA """
+            # # Obtain EEG data from the LSL stream
+            # eeg_data, timestamp = inlet.pull_chunk(
+            #     timeout=1, max_samples=int(SHIFT_LENGTH * fs))
 
-            # Only keep the channel we're interested in
-            ch_data = np.array(eeg_data)[:, INDEX_CHANNEL]
-            # Update EEG buffer with the new data
-            eeg_buffer, filter_state = utils.update_buffer(
-                eeg_buffer, ch_data, notch=True,
-                filter_state=filter_state)
+            # # Only keep the channel we're interested in
+            # ch_data = np.array(eeg_data)[:, INDEX_CHANNEL]
+            # # Update EEG buffer with the new data
+            # eeg_buffer, filter_state = utils.update_buffer(
+            #     eeg_buffer, ch_data, notch=True,
+            #     filter_state=filter_state)
 
-            """ 3.2 COMPUTE BAND POWERS """
-            # Get newest samples from the buffer
-            data_epoch = utils.get_last_data(eeg_buffer,
-                                             EPOCH_LENGTH * fs)
+            # """ 3.2 COMPUTE BAND POWERS """
+            # # Get newest samples from the buffer
+            # data_epoch = utils.get_last_data(eeg_buffer,
+            #                                  EPOCH_LENGTH * fs)
 
-            # Compute band powers
-            band_powers = utils.compute_band_powers(data_epoch, fs)
-            band_buffer, _ = utils.update_buffer(band_buffer,
-                                                 np.asarray([band_powers]))
-            # Compute the average band powers for all epochs in buffer
-            # This helps to smooth out noise
-            smooth_band_powers = np.mean(band_buffer, axis=0)
+            # # Compute band powers
+            # band_powers = utils.compute_band_powers(data_epoch, fs)
+            # band_buffer, _ = utils.update_buffer(band_buffer,
+            #                                      np.asarray([band_powers]))
+            # # Compute the average band powers for all epochs in buffer
+            # # This helps to smooth out noise
+            # smooth_band_powers = np.mean(band_buffer, axis=0)
+
+            smooth_band_powers = get_band_powers(
+                inlet, eeg_buffer, filter_state, band_buffer)
 
             # print('Delta: ', band_powers[Band.Delta], ' Theta: ', band_powers[Band.Theta],
             #       ' Alpha: ', band_powers[Band.Alpha], ' Beta: ', band_powers[Band.Beta])
