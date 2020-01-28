@@ -15,6 +15,8 @@ import numpy as np  # Module that simplifies computations on matrices
 from pylsl import StreamInlet, resolve_byprop  # Module to receive EEG data
 import utils  # Utility functions
 from pythonosc import udp_client  # Module for OSC
+import time  # time module for timing calibration
+
 
 # Handy little enum to make code more readable
 
@@ -25,6 +27,10 @@ class Band:
     Alpha = 2
     Beta = 3
 
+
+""" CALIBRATION PARAMETERS """
+# Calibration time in seconds
+CALIBRATION_TIME = 25
 
 """ EXPERIMENTAL PARAMETERS """
 # Modify these to change aspects of the signal processing
@@ -73,7 +79,7 @@ def get_band_powers(inlet, eeg_buffer, filter_state, band_buffer):
     # This helps to smooth out noise
     smooth_band_powers = np.mean(band_buffer, axis=0)
 
-    return smooth_band_powers
+    return smooth_band_powers, band_powers
 
 
 if __name__ == "__main__":
@@ -129,36 +135,49 @@ if __name__ == "__main__":
     print('Press Ctrl-C in the console to break the while loop.')
 
     try:
+
+        # Calibration loop
+        # time log
+        begin_calibration_loop = time.time()
+        current_time = time.time()
+        # empty lists to store the calibration values
+        calibration_alpha = []
+        calibration_beta = []
+        calibration_smoothed_alpha = []
+        calibration_smoothed_beta = []
+        while begin_calibration_loop + CALIBRATION_TIME > current_time:
+            smooth_band_powers, band_powers = get_band_powers(
+                inlet, eeg_buffer, filter_state, band_buffer)
+            calibration_alpha.append(band_powers[Band.Alpha])
+            calibration_beta.append(band_powers[Band.Beta])
+            calibration_smoothed_alpha.append(smooth_band_powers[Band.Alpha])
+            calibration_smoothed_beta.append(smooth_band_powers[Band.Beta])
+            current_time = time.time()
+
+        mean_alpha = np.mean(calibration_alpha)
+        print(mean_alpha)
+        mean_smoothed_alpha = np.mean(calibration_smoothed_alpha)
+        print(mean_smoothed_alpha)
+        std_alpha = np.std(calibration_alpha)
+        print(std_alpha)
+        std_smoothed_alpha = np.std(calibration_smoothed_alpha)
+        print(std_smoothed_alpha)
+
+        mean_beta = np.mean(calibration_beta)
+        print(mean_beta)
+        mean_smoothed_beta = np.mean(calibration_smoothed_beta)
+        print(mean_smoothed_beta)
+        std_beta = np.std(calibration_beta)
+        print(std_beta)
+        std_smoothed_beta = np.std(calibration_smoothed_beta)
+        print(std_smoothed_beta)
+
+        sys.exit()
         # The following loop acquires data, computes band powers,
         # and sends OSC neurofeedback metric based on those band powers
         while True:
 
-            # """ 3.1 ACQUIRE DATA """
-            # # Obtain EEG data from the LSL stream
-            # eeg_data, timestamp = inlet.pull_chunk(
-            #     timeout=1, max_samples=int(SHIFT_LENGTH * fs))
-
-            # # Only keep the channel we're interested in
-            # ch_data = np.array(eeg_data)[:, INDEX_CHANNEL]
-            # # Update EEG buffer with the new data
-            # eeg_buffer, filter_state = utils.update_buffer(
-            #     eeg_buffer, ch_data, notch=True,
-            #     filter_state=filter_state)
-
-            # """ 3.2 COMPUTE BAND POWERS """
-            # # Get newest samples from the buffer
-            # data_epoch = utils.get_last_data(eeg_buffer,
-            #                                  EPOCH_LENGTH * fs)
-
-            # # Compute band powers
-            # band_powers = utils.compute_band_powers(data_epoch, fs)
-            # band_buffer, _ = utils.update_buffer(band_buffer,
-            #                                      np.asarray([band_powers]))
-            # # Compute the average band powers for all epochs in buffer
-            # # This helps to smooth out noise
-            # smooth_band_powers = np.mean(band_buffer, axis=0)
-
-            smooth_band_powers = get_band_powers(
+             smooth_band_powers, band_powers = get_band_powers(
                 inlet, eeg_buffer, filter_state, band_buffer)
 
             # print('Delta: ', band_powers[Band.Delta], ' Theta: ', band_powers[Band.Theta],
