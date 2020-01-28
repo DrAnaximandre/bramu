@@ -172,15 +172,18 @@ if __name__ == "__main__":
             # Extract the Alpha and Beta waves
             alpha = smooth_band_powers[Band.Alpha]
             beta = smooth_band_powers[Band.Beta]
-            # Computes the ratio and its sigmoid
+            # Computes the ratio, the calibrated ratio and their sigmoid
             score = beta / alpha
-            score_calibrated = (score-mean_score_calibration)/std_score_calibration
-            print(f"score {score}")
-            print(f"score calibrated {score_calibrated}")
+            score_calibrated = (score-mean_score_calibration) / std_score_calibration
             sig_score = utils.sigmoid(score)
+            sig_score_calibrated = utils.sigmoid(score_calibrated)
+
             # Sends the OSC values (they need to be str for Unity)
             send_osc_message(str(score), "score")
             send_osc_message(str(sig_score), "sig_score")
+            send_osc_message(str(score_calibrated), "score_calibrated")
+            send_osc_message(str(sig_score_calibrated), "sig_score_calibrated")
+
 
     except KeyboardInterrupt:
         print('Closing!')
