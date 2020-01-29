@@ -11,17 +11,18 @@ Real-time brain activity metrics are derived from the EEG signals using Python a
 
 This repo deals with:
 - (GUI) connecting the EEG device to a Windows or Ubuntu computer;
-- (python) transforming voltages to brain waves through FFT;
-- (python) computing brain activity metrics;
-- (python) sending OSC messages on localhost;
+- (Python) transforming voltages to brain waves through FFT;
+- (Python) computing brain activity metrics;
+- (Python) sending OSC messages on localhost;
 - (Sonic Pi) receiving OSC messages and converting them to low-frequency sounds.
 
 ## Dependencies
 
 Python 3.7 +
-- 'numpy'
-- 'pylsl'
-- 'pythonosc'
+- `numpy`
+- `pylsl`
+- `pythonosc`
+
 Sonic Pi 3.1 +
 
 ## Contributing
@@ -29,7 +30,9 @@ Contributions and collaborations are welcome. For major changes, please open an 
 
 ## Acknowledgments
 Thanks given to the amazing neuro and sonic-pi communities.
+
 Thanks to @hyruuk for help connecting the Muse to a laptop with eegsynth.
+
 The core Python code was adapted from https://github.com/alexandrebarachant/muse-lsl/blob/master/examples/neurofeedback.py
 
 ## License
