@@ -138,3 +138,32 @@ def get_last_data(data_buffer, newest_samples):
     new_buffer = data_buffer[(data_buffer.shape[0] - newest_samples):, :]
 
     return new_buffer
+
+def get_band_powers(inlet, eeg_buffer, filter_state, band_buffer,
+                    SHIFT_LENGTH, INDEX_CHANNEL, EPOCH_LENGTH, fs):
+    """ 3.1 ACQUIRE DATA """
+    # Obtain EEG data from the LSL stream
+    eeg_data, timestamp = inlet.pull_chunk(
+        timeout=1, max_samples=int(SHIFT_LENGTH * fs))
+
+    # Only keep the channel we're interested in
+    ch_data = np.array(eeg_data)[:, INDEX_CHANNEL]
+    # Update EEG buffer with the new data
+    eeg_buffer, filter_state = update_buffer(
+        eeg_buffer, ch_data, notch=True,
+        filter_state=filter_state)
+
+    """ 3.2 COMPUTE BAND POWERS """
+    # Get newest samples from the buffer
+    data_epoch = get_last_data(eeg_buffer,
+                                     EPOCH_LENGTH * fs)
+
+    # Compute band powers
+    band_powers = compute_band_powers(data_epoch, fs)
+    band_buffer, _ = update_buffer(band_buffer,
+                                         np.asarray([band_powers]))
+    # Compute the average band powers for all epochs in buffer
+    # This helps to smooth out noise
+    smooth_band_powers = np.mean(band_buffer, axis=0)
+
+    return smooth_band_powers, band_powers
