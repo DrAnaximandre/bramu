@@ -9,7 +9,7 @@ Inspired by https://github.com/alexandrebarachant/muse-lsl/blob/master/muselsl/v
 """
 
 from pylsl import StreamInlet, resolve_byprop
-from vispy import app, gloo
+from vispy import app, gloo, visuals
 from pythonosc import udp_client
 from seaborn import color_palette
 import numpy as np
@@ -104,7 +104,10 @@ class Canvas(app.Canvas):
                  lsl_inlet,
                  osc_sender):
 
-        super(Canvas, self).__init__()
+        app.Canvas.__init__(self, title='test',
+                            keys='interactive', 
+                            dpi=1)
+
 
         self.inlet = lsl_inlet
         self.sender = osc_sender
@@ -114,7 +117,7 @@ class Canvas(app.Canvas):
 
         window = 10
         self.sfreq = info.nominal_srate()
-        self.n_samples = int(self.sfreq * window) 
+        self.n_samples = int(self.sfreq * window)
         self.n_chans = info.channel_count()
 
         n_rows = 4
@@ -152,11 +155,25 @@ class Canvas(app.Canvas):
         self.data_f = np.zeros((self.n_samples, self.n_chans))
         self.data = np.zeros((self.n_samples, self.n_chans))
 
+
+        # text
+        self.font_size = 48.
+        self.names = []
+        self.quality = []
+        band_names = ["Alpha", "Beta", "Delta", "Theta"]
+        for ii in range(n_rows):
+            text = visuals.TextVisual(band_names[ii], bold=True, color='white')
+            self.names.append(text)
+        self.quality_colors = color_palette("RdYlGn", 11)[::-1]
+
+
+
         self._timer = app.Timer('auto', connect=self.on_timer, start=True)
         gloo.set_viewport(0, 0, *self.physical_size)
         gloo.set_state(clear_color='black', blend=True,
                        blend_func=('src_alpha', 'one_minus_src_alpha'))
 
+    
         self.show()
 
         self.eeg_buffer = np.zeros((int(self.sfreq * window), 4))
@@ -191,7 +208,17 @@ class Canvas(app.Canvas):
             # This helps to smooth out noise
             smooth_band_powers = np.mean(self.band_buffer, axis=0)
 
-            print(self.band_buffer.shape)
+
+            scale = 100
+
+            self.band_buffer /= scale
+
+            sd = np.std(self.band_buffer[-int(self.sfreq):],
+                            axis=0)[::-1] * scale
+            co = np.int32(np.tanh((sd - 30) / 15) * 5 + 5)
+            for ii in range(self.n_chans):
+                self.names[ii].font_size = 12 + co[ii]
+                self.names[ii].color = self.quality_colors[co[ii]]
 
             self.program['a_position'].set_data(
                 self.band_buffer.T.ravel().astype(np.float32))
@@ -201,7 +228,7 @@ class Canvas(app.Canvas):
         gloo.clear()
         gloo.set_viewport(0, 0, *self.physical_size)
         self.program.draw('line_strip')
-        # [t.draw() for t in self.names + self.quality]
+        [t.draw() for t in self.names]
 
     def send_osc_message(self, value, name):
         self.sender.send_message('/fund_freq/' + name, value)
