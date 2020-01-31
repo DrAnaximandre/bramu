@@ -19,41 +19,6 @@ def sigmoid(x):
     return(1 / (1 + np.exp(x)))
 
 
-def epoch(data, samples_epoch, samples_overlap=0):
-    """Extract epochs from a time series.
-    Given a 2D array of the shape [n_samples, n_channels]
-    Creates a 3D array of the shape [wlength_samples, n_channels, n_epochs]
-    Args:
-        data (numpy.ndarray or list of lists): data [n_samples, n_channels]
-        samples_epoch (int): window length in samples
-        samples_overlap (int): Overlap between windows in samples
-    Returns:
-        (numpy.ndarray): epoched data of shape
-    """
-
-    if isinstance(data, list):
-        data = np.array(data)
-
-    n_samples, n_channels = data.shape
-
-    samples_shift = samples_epoch - samples_overlap
-
-    n_epochs = int(
-        np.floor((n_samples - samples_epoch) / float(samples_shift)) + 1)
-
-    # Markers indicate where the epoch starts, and the epoch contains samples_epoch rows
-    markers = np.asarray(range(0, n_epochs + 1)) * samples_shift
-    markers = markers.astype(int)
-
-    # Divide data in epochs
-    epochs = np.zeros((samples_epoch, n_channels, n_epochs))
-
-    for i in range(0, n_epochs):
-        epochs[:, :, i] = data[markers[i]:markers[i] + samples_epoch, :]
-
-    return epochs
-
-
 def compute_band_powers(eegdata, fs):
     """Extract the features (band powers) from the EEG.
     Args:
@@ -127,23 +92,6 @@ def compute_feature_matrix(epochs, fs):
     return feature_matrix
 
 
-def get_feature_names(ch_names):
-    """Generate the name of the features.
-    Args:
-        ch_names (list): electrode names
-    Returns:
-        (list): feature names
-    """
-    bands = ['delta', 'theta', 'alpha', 'beta']
-
-    feat_names = []
-    for band in bands:
-        for ch in range(len(ch_names)):
-            feat_names.append(band + '-' + ch_names[ch])
-
-    return feat_names
-
-
 def update_buffer(data_buffer, new_data, notch=False, filter_state=None):
     """
     Concatenates "new_data" into "data_buffer", and returns an array with
@@ -173,3 +121,33 @@ def get_last_data(data_buffer, newest_samples):
     new_buffer = data_buffer[(data_buffer.shape[0] - newest_samples):, :]
 
     return new_buffer
+
+
+def get_band_powers(inlet, eeg_buffer, filter_state, band_buffer,
+                    SHIFT_LENGTH, INDEX_CHANNEL, EPOCH_LENGTH, fs):
+    """ 3.1 ACQUIRE DATA """
+    # Obtain EEG data from the LSL stream
+    eeg_data, timestamp = inlet.pull_chunk(
+        timeout=1, max_samples=int(SHIFT_LENGTH * fs))
+
+    # Only keep the channel we're interested in
+    ch_data = np.array(eeg_data)[:, INDEX_CHANNEL]
+    # Update EEG buffer with the new data
+    eeg_buffer, filter_state = update_buffer(
+        eeg_buffer, ch_data, notch=True,
+        filter_state=filter_state)
+
+    """ 3.2 COMPUTE BAND POWERS """
+    # Get newest samples from the buffer
+    data_epoch = get_last_data(eeg_buffer,
+                               EPOCH_LENGTH * fs)
+
+    # Compute band powers
+    band_powers = compute_band_powers(data_epoch, fs)
+    band_buffer, _ = update_buffer(band_buffer,
+                                   np.asarray([band_powers]))
+    # Compute the average band powers for all epochs in buffer
+    # This helps to smooth out noise
+    smooth_band_powers = np.mean(band_buffer, axis=0)
+
+    return smooth_band_powers, band_powers
