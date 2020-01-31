@@ -30,7 +30,7 @@ class Band:
 
 """ CALIBRATION PARAMETERS """
 # Calibration time in seconds
-CALIBRATION_TIME = 5
+CALIBRATION_TIME = 25
 
 """ EXPERIMENTAL PARAMETERS """
 # Modify these to change aspects of the signal processing

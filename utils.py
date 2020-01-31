@@ -92,23 +92,6 @@ def compute_feature_matrix(epochs, fs):
     return feature_matrix
 
 
-def get_feature_names(ch_names):
-    """Generate the name of the features.
-    Args:
-        ch_names (list): electrode names
-    Returns:
-        (list): feature names
-    """
-    bands = ['delta', 'theta', 'alpha', 'beta']
-
-    feat_names = []
-    for band in bands:
-        for ch in range(len(ch_names)):
-            feat_names.append(band + '-' + ch_names[ch])
-
-    return feat_names
-
-
 def update_buffer(data_buffer, new_data, notch=False, filter_state=None):
     """
     Concatenates "new_data" into "data_buffer", and returns an array with
@@ -139,6 +122,7 @@ def get_last_data(data_buffer, newest_samples):
 
     return new_buffer
 
+
 def get_band_powers(inlet, eeg_buffer, filter_state, band_buffer,
                     SHIFT_LENGTH, INDEX_CHANNEL, EPOCH_LENGTH, fs):
     """ 3.1 ACQUIRE DATA """
@@ -156,12 +140,12 @@ def get_band_powers(inlet, eeg_buffer, filter_state, band_buffer,
     """ 3.2 COMPUTE BAND POWERS """
     # Get newest samples from the buffer
     data_epoch = get_last_data(eeg_buffer,
-                                     EPOCH_LENGTH * fs)
+                               EPOCH_LENGTH * fs)
 
     # Compute band powers
     band_powers = compute_band_powers(data_epoch, fs)
     band_buffer, _ = update_buffer(band_buffer,
-                                         np.asarray([band_powers]))
+                                   np.asarray([band_powers]))
     # Compute the average band powers for all epochs in buffer
     # This helps to smooth out noise
     smooth_band_powers = np.mean(band_buffer, axis=0)
