@@ -19,41 +19,6 @@ def sigmoid(x):
     return(1 / (1 + np.exp(x)))
 
 
-def epoch(data, samples_epoch, samples_overlap=0):
-    """Extract epochs from a time series.
-    Given a 2D array of the shape [n_samples, n_channels]
-    Creates a 3D array of the shape [wlength_samples, n_channels, n_epochs]
-    Args:
-        data (numpy.ndarray or list of lists): data [n_samples, n_channels]
-        samples_epoch (int): window length in samples
-        samples_overlap (int): Overlap between windows in samples
-    Returns:
-        (numpy.ndarray): epoched data of shape
-    """
-
-    if isinstance(data, list):
-        data = np.array(data)
-
-    n_samples, n_channels = data.shape
-
-    samples_shift = samples_epoch - samples_overlap
-
-    n_epochs = int(
-        np.floor((n_samples - samples_epoch) / float(samples_shift)) + 1)
-
-    # Markers indicate where the epoch starts, and the epoch contains samples_epoch rows
-    markers = np.asarray(range(0, n_epochs + 1)) * samples_shift
-    markers = markers.astype(int)
-
-    # Divide data in epochs
-    epochs = np.zeros((samples_epoch, n_channels, n_epochs))
-
-    for i in range(0, n_epochs):
-        epochs[:, :, i] = data[markers[i]:markers[i] + samples_epoch, :]
-
-    return epochs
-
-
 def compute_band_powers(eegdata, fs):
     """Extract the features (band powers) from the EEG.
     Args:
