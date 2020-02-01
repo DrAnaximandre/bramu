@@ -5,7 +5,11 @@ Fundamental Frequency:
 new version of the app so that I have something to monitor
 while the experience plays.
 
-Inspired by https://github.com/alexandrebarachant/muse-lsl/blob/master/muselsl/viewer_v2.py
+Inspired by
+https://github.com/alexandrebarachant/muse-lsl/blob/master/muselsl/viewer_v2.py
+and
+https://github.com/alexandrebarachant/muse-lsl/blob/master/examples/neurofeedback.py
+
 """
 
 from pylsl import StreamInlet, resolve_byprop
@@ -113,30 +117,31 @@ class Canvas(app.Canvas):
         info = self.inlet.info()
         description = info.desc()
 
-        window = 10
+        self.window = 5 # seconds
         self.sfreq = info.nominal_srate()
-        self.n_samples = int(self.sfreq * window)
+        self.n_samples = int(self.sfreq * self.window)
         self.n_chans = info.channel_count()
 
-        n_rows = 4
-        n_cols = 1
+        self.n_rows = 5
+        self.n_cols = 1
 
         # Number of signals.
-        m = n_rows * n_cols
+        m = self.n_rows * self.n_cols
         # Number of samples per signal.
         n = self.n_samples
 
         # Various signal amplitudes.
         y = np.zeros((m, n)).astype(np.float32)
 
-        color = color_palette("RdBu_r", n_rows)
+        color = color_palette("RdBu_r", self.n_rows)
 
         color = np.repeat(color, n, axis=0).astype(np.float32)
 
         # Signal 2D index of each vertex (row and col) and x-index (sample index
         # within each signal).
-        index = np.c_[np.repeat(np.repeat(np.arange(n_cols), n_rows), n),
-                      np.repeat(np.tile(np.arange(n_rows), n_cols), n),
+        index = np.c_[np.repeat(np.repeat(np.arange(self.n_cols), self.n_rows), n),
+                      np.repeat(
+                          np.tile(np.arange(self.n_rows), self.n_cols), n),
                       np.tile(np.arange(n), m)].astype(np.float32)
 
         self.program = gloo.Program(VERT_SHADER, FRAG_SHADER)
@@ -144,7 +149,7 @@ class Canvas(app.Canvas):
         self.program['a_color'] = color
         self.program['a_index'] = index
         self.program['u_scale'] = (1., 1.)
-        self.program['u_size'] = (n_rows, n_cols)
+        self.program['u_size'] = (self.n_rows, self.n_cols)
         self.program['u_n'] = n
 
         self.filt = True
@@ -156,11 +161,13 @@ class Canvas(app.Canvas):
         # text
         self.font_size = 48.
         self.names = []
-        self.quality = []
-        band_names = ["Alpha", "Beta", "Delta", "Theta"]
-        for ii in range(n_rows):
+        self.values = []
+        band_names = ["Score", "Delta", "Theta", "Alpha", "Beta"]
+        for ii in range(self.n_rows):
             text = visuals.TextVisual(band_names[ii], bold=True, color='white')
             self.names.append(text)
+            text = visuals.TextVisual('', bold=True, color='white')
+            self.values.append(text)
 
         self.quality_colors = color_palette("RdYlGn", 11)[::-1]
 
@@ -171,10 +178,9 @@ class Canvas(app.Canvas):
 
         self.show()
 
-        self.eeg_buffer = np.zeros((int(self.sfreq * window), 4))
+        self.eeg_buffer = np.zeros((int(self.sfreq * self.window), 4))
         self.filter_state = None
-        self.band_buffer = np.zeros((int(self.sfreq * window), 4))
-        print(self.band_buffer.shape)
+        self.band_buffer = np.zeros((int(self.sfreq * self.window), 4))
 
     def on_timer(self, event):
 
@@ -192,7 +198,7 @@ class Canvas(app.Canvas):
 
             """ 3.2 COMPUTE BAND POWERS """
             # Get newest samples from the buffer
-            data_epoch = get_last_data(self.eeg_buffer, self.n_samples)
+            data_epoch = get_last_data(self.eeg_buffer, int(self.sfreq))
 
             # Compute band powers
             band_powers = compute_band_powers(data_epoch, self.sfreq)
@@ -201,20 +207,35 @@ class Canvas(app.Canvas):
 
             # Compute the average band powers for all epochs in buffer
             # This helps to smooth out noise
-            smooth_band_powers = np.mean(self.band_buffer, axis=0)
+            self.smooth_band_powers = np.mean(self.band_buffer, axis=0)
 
+            beta = self.band_buffer[:, 3]
+            # add an epsilon to avoid 0 division ...
+            alpha = self.band_buffer[:, 2] + 1e-8
+            keep = int(self.window * self.sfreq)
+            scores = np.reshape(beta / alpha, (keep, 1))
+
+            score_and_band_buffer = np.concatenate(
+                (scores, self.band_buffer), axis=1)
+
+            last = get_last_data(score_and_band_buffer, 1)
+            print(last)
+
+            self.names[0].font_size = 16
+            self.values[0].text = '%.2f' % (last[0, 0])
             for ii in range(self.n_chans):
-                self.names[ii].font_size = 16
+                self.names[ii + 1].font_size = 16
+                self.values[ii + 1].text = '%.2f' % (last[0, ii + 1])
 
             self.program['a_position'].set_data(
-                self.band_buffer.T.ravel().astype(np.float32))
+                score_and_band_buffer.T.ravel().astype(np.float32))
             self.update()
 
     def on_draw(self, event):
         gloo.clear()
         gloo.set_viewport(0, 0, *self.physical_size)
         self.program.draw('line_strip')
-        [t.draw() for t in self.names]
+        [t.draw() for t in self.names + self.values]
 
     def send_osc_message(self, value, name):
         self.sender.send_message('/fund_freq/' + name, value)
@@ -226,12 +247,16 @@ class Canvas(app.Canvas):
 
         for ii, t in enumerate(self.names):
             t.transforms.configure(canvas=self, viewport=vp)
-            t.pos = (self.size[0] * 0.035,  # (self.size[0] * 0.025,
-                     ((ii + 0.5) / 4) * self.size[1])
-            print(t.pos)
+            t.pos = (self.size[0] * 0.035,
+                     ((ii + 0.5) / self.n_rows) * self.size[1])
+
+        for ii, t in enumerate(self.values):
+            t.transforms.configure(canvas=self, viewport=vp)
+            t.pos = (self.size[0] * 0.975,
+                     ((ii + 0.5) / self.n_rows) * self.size[1])
 
 
-def view():
+def main():
 
     sender = udp_client.SimpleUDPClient('127.0.0.1', 4559)
 
@@ -248,4 +273,4 @@ def view():
 
 
 if __name__ == '__main__':
-    view()
+    main()
