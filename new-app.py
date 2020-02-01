@@ -114,13 +114,13 @@ class Canvas(app.Canvas):
         self.inlet = lsl_inlet
         self.sender = osc_sender
 
-        info = self.inlet.info()
-        description = info.desc()
+        # info = self.inlet.info()
+        # description = info.desc()
 
-        self.window = 5 # seconds
-        self.sfreq = info.nominal_srate()
+        self.window = 5  # seconds
+        self.sfreq = 256 # info.nominal_srate()
         self.n_samples = int(self.sfreq * self.window)
-        self.n_chans = info.channel_count()
+        self.n_chans = 4 #info.channel_count()
 
         self.n_rows = 5
         self.n_cols = 1
@@ -155,39 +155,45 @@ class Canvas(app.Canvas):
         self.filt = True
         self.af = [1.0]
 
-        self.data_f = np.zeros((self.n_samples, self.n_chans))
-        self.data = np.zeros((self.n_samples, self.n_chans))
-
-        # text
-        self.font_size = 48.
-        self.names = []
-        self.values = []
-        band_names = ["Score", "Delta", "Theta", "Alpha", "Beta"]
-        for ii in range(self.n_rows):
-            text = visuals.TextVisual(band_names[ii], bold=True, color='white')
-            self.names.append(text)
-            text = visuals.TextVisual('', bold=True, color='white')
-            self.values.append(text)
-
-        self.quality_colors = color_palette("RdYlGn", 11)[::-1]
-
-        self._timer = app.Timer('auto', connect=self.on_timer, start=True)
-        gloo.set_viewport(0, 0, *self.physical_size)
-        gloo.set_state(clear_color='black', blend=True,
-                       blend_func=('src_alpha', 'one_minus_src_alpha'))
-
-        self.show()
-
         self.eeg_buffer = np.zeros((int(self.sfreq * self.window), 4))
         self.filter_state = None
         self.band_buffer = np.zeros((int(self.sfreq * self.window), 4))
 
+        """ TEXTS """
+        self.band_names = []  # displayed left
+        band_names = ["Score", "Delta", "Theta", "Alpha", "Beta"]
+
+        self.last_values = []  # displayed right, upper
+        self.mean_values = []  # displayed right, lower
+
+        for ii in range(self.n_rows):
+            text = visuals.TextVisual(band_names[ii], bold=True, color='white')
+            self.band_names.append(text)
+            text = visuals.TextVisual('', bold=True, color='white')
+            self.last_values.append(text)
+            text = visuals.TextVisual('', bold=True, color='white')
+            self.mean_values.append(text)
+
+        self.quality_colors = color_palette("RdYlGn", 11)[::-1]
+
+        """ APP INTERNALS  """
+        self._timer = app.Timer('auto', connect=self.on_timer, start=True)
+        gloo.set_viewport(0, 0, *self.physical_size)
+        gloo.set_state(clear_color='black', blend=True,
+                       blend_func=('src_alpha', 'one_minus_src_alpha'))
+        self.show()
+
     def on_timer(self, event):
 
-        eeg_data, timestamp = self.inlet.pull_chunk(
-            timeout=1, max_samples=int(SHIFT_LENGTH * self.sfreq))
 
-        if eeg_data:
+        eeg_data = np.random.normal(size=(int(SHIFT_LENGTH * self.sfreq), 4))
+
+        # eeg_data, _ = self.inlet.pull_chunk(
+        #     timeout=1, max_samples=int(SHIFT_LENGTH * self.sfreq))
+
+#        if eeg_data:
+        print( eeg_data.shape)
+        if True:
 
             # Only keep the channel we're interested in
             ch_data = np.array(eeg_data)[:, INDEX_CHANNEL]
@@ -207,7 +213,7 @@ class Canvas(app.Canvas):
 
             # Compute the average band powers for all epochs in buffer
             # This helps to smooth out noise
-            self.smooth_band_powers = np.mean(self.band_buffer, axis=0)
+            smooth_band_powers = np.mean(self.band_buffer, axis=0)
 
             beta = self.band_buffer[:, 3]
             # add an epsilon to avoid 0 division ...
@@ -215,17 +221,21 @@ class Canvas(app.Canvas):
             keep = int(self.window * self.sfreq)
             scores = np.reshape(beta / alpha, (keep, 1))
 
+            smooth_score = np.mean(scores, axis=0)
+
             score_and_band_buffer = np.concatenate(
                 (scores, self.band_buffer), axis=1)
 
             last = get_last_data(score_and_band_buffer, 1)
             print(last)
 
-            self.names[0].font_size = 16
-            self.values[0].text = '%.2f' % (last[0, 0])
-            for ii in range(self.n_chans):
-                self.names[ii + 1].font_size = 16
-                self.values[ii + 1].text = '%.2f' % (last[0, ii + 1])
+            self.band_names[0].font_size = 16
+            self.last_values[0].text = 'last: %.2f' % (last[0, 0])
+            self.mean_values[0].text = 'mean: %.2f' % (smooth_score)
+            for i in range(self.n_chans):
+                self.band_names[i + 1].font_size = 16
+                self.last_values[i + 1].text = 'last: %.2f' % (last[0, i + 1])
+                self.mean_values[i + 1].text = 'mean: %.2f' % (smooth_band_powers[i])
 
             self.program['a_position'].set_data(
                 score_and_band_buffer.T.ravel().astype(np.float32))
@@ -235,7 +245,7 @@ class Canvas(app.Canvas):
         gloo.clear()
         gloo.set_viewport(0, 0, *self.physical_size)
         self.program.draw('line_strip')
-        [t.draw() for t in self.names + self.values]
+        [t.draw() for t in self.band_names + self.last_values+ self.mean_values]
 
     def send_osc_message(self, value, name):
         self.sender.send_message('/fund_freq/' + name, value)
@@ -245,29 +255,34 @@ class Canvas(app.Canvas):
         vp = (0, 0, self.physical_size[0], self.physical_size[1])
         self.context.set_viewport(*vp)
 
-        for ii, t in enumerate(self.names):
+        for ii, t in enumerate(self.band_names):
             t.transforms.configure(canvas=self, viewport=vp)
             t.pos = (self.size[0] * 0.035,
                      ((ii + 0.5) / self.n_rows) * self.size[1])
 
-        for ii, t in enumerate(self.values):
+        for ii, t in enumerate(self.last_values):
             t.transforms.configure(canvas=self, viewport=vp)
-            t.pos = (self.size[0] * 0.975,
-                     ((ii + 0.5) / self.n_rows) * self.size[1])
+            t.pos = (self.size[0] * 0.95,
+                     ((ii + 0.45) / self.n_rows) * self.size[1])
 
+        for ii, t in enumerate(self.mean_values):
+            t.transforms.configure(canvas=self, viewport=vp)
+            t.pos = (self.size[0] * 0.95,
+                     ((ii + 0.55) / self.n_rows) * self.size[1])
 
 def main():
 
     sender = udp_client.SimpleUDPClient('127.0.0.1', 4559)
 
-    print("Looking for an EEG stream...")
-    streams = resolve_byprop('type', 'EEG', timeout=10)
+    # print("Looking for an EEG stream...")
+    # streams = resolve_byprop('type', 'EEG', timeout=10)
 
-    if len(streams) == 0:
-        raise(RuntimeError("Can't find EEG stream."))
-    print("Start acquiring data.")
+    # if len(streams) == 0:
+    #     raise(RuntimeError("Can't find EEG stream."))
+    # print("Start acquiring data.")
 
-    inlet = StreamInlet(streams[0], max_chunklen=12)
+    # inlet = StreamInlet(streams[0], max_chunklen=12)
+    inlet = None
     Canvas(inlet, sender)
     app.run()
 
