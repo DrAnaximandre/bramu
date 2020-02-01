@@ -118,9 +118,9 @@ class Canvas(app.Canvas):
         # description = info.desc()
 
         self.window = 5  # seconds
-        self.sfreq = 256 # info.nominal_srate()
+        self.sfreq = 256  # info.nominal_srate()
         self.n_samples = int(self.sfreq * self.window)
-        self.n_chans = 4 #info.channel_count()
+        self.n_chans = 4  # info.channel_count()
 
         self.n_rows = 5
         self.n_cols = 1
@@ -185,15 +185,10 @@ class Canvas(app.Canvas):
 
     def on_timer(self, event):
 
+        eeg_data, _ = self.inlet.pull_chunk(
+            timeout=1, max_samples=int(SHIFT_LENGTH * self.sfreq))
 
-        eeg_data = np.random.normal(size=(int(SHIFT_LENGTH * self.sfreq), 4))
-
-        # eeg_data, _ = self.inlet.pull_chunk(
-        #     timeout=1, max_samples=int(SHIFT_LENGTH * self.sfreq))
-
-#        if eeg_data:
-        print( eeg_data.shape)
-        if True:
+        if eeg_data:
 
             # Only keep the channel we're interested in
             ch_data = np.array(eeg_data)[:, INDEX_CHANNEL]
@@ -235,7 +230,8 @@ class Canvas(app.Canvas):
             for i in range(self.n_chans):
                 self.band_names[i + 1].font_size = 16
                 self.last_values[i + 1].text = 'last: %.2f' % (last[0, i + 1])
-                self.mean_values[i + 1].text = 'mean: %.2f' % (smooth_band_powers[i])
+                self.mean_values[i +
+                                 1].text = 'mean: %.2f' % (smooth_band_powers[i])
 
             self.program['a_position'].set_data(
                 score_and_band_buffer.T.ravel().astype(np.float32))
@@ -245,7 +241,7 @@ class Canvas(app.Canvas):
         gloo.clear()
         gloo.set_viewport(0, 0, *self.physical_size)
         self.program.draw('line_strip')
-        [t.draw() for t in self.band_names + self.last_values+ self.mean_values]
+        [t.draw() for t in self.band_names + self.last_values + self.mean_values]
 
     def send_osc_message(self, value, name):
         self.sender.send_message('/fund_freq/' + name, value)
@@ -270,19 +266,19 @@ class Canvas(app.Canvas):
             t.pos = (self.size[0] * 0.95,
                      ((ii + 0.55) / self.n_rows) * self.size[1])
 
+
 def main():
 
     sender = udp_client.SimpleUDPClient('127.0.0.1', 4559)
 
-    # print("Looking for an EEG stream...")
-    # streams = resolve_byprop('type', 'EEG', timeout=10)
+    print("Looking for an EEG stream...")
+    streams = resolve_byprop('type', 'EEG', timeout=10)
 
-    # if len(streams) == 0:
-    #     raise(RuntimeError("Can't find EEG stream."))
-    # print("Start acquiring data.")
+    if len(streams) == 0:
+        raise(RuntimeError("Can't find EEG stream."))
+    print("Start acquiring data.")
 
-    # inlet = StreamInlet(streams[0], max_chunklen=12)
-    inlet = None
+    inlet = StreamInlet(streams[0], max_chunklen=12)
     Canvas(inlet, sender)
     app.run()
 
