@@ -105,9 +105,7 @@ class Canvas(app.Canvas):
                  osc_sender):
 
         app.Canvas.__init__(self, title='test',
-                            keys='interactive', 
-                            dpi=1)
-
+                            keys='interactive')
 
         self.inlet = lsl_inlet
         self.sender = osc_sender
@@ -155,7 +153,6 @@ class Canvas(app.Canvas):
         self.data_f = np.zeros((self.n_samples, self.n_chans))
         self.data = np.zeros((self.n_samples, self.n_chans))
 
-
         # text
         self.font_size = 48.
         self.names = []
@@ -164,16 +161,14 @@ class Canvas(app.Canvas):
         for ii in range(n_rows):
             text = visuals.TextVisual(band_names[ii], bold=True, color='white')
             self.names.append(text)
+
         self.quality_colors = color_palette("RdYlGn", 11)[::-1]
-
-
 
         self._timer = app.Timer('auto', connect=self.on_timer, start=True)
         gloo.set_viewport(0, 0, *self.physical_size)
         gloo.set_state(clear_color='black', blend=True,
                        blend_func=('src_alpha', 'one_minus_src_alpha'))
 
-    
         self.show()
 
         self.eeg_buffer = np.zeros((int(self.sfreq * window), 4))
@@ -208,17 +203,8 @@ class Canvas(app.Canvas):
             # This helps to smooth out noise
             smooth_band_powers = np.mean(self.band_buffer, axis=0)
 
-
-            scale = 100
-
-            self.band_buffer /= scale
-
-            sd = np.std(self.band_buffer[-int(self.sfreq):],
-                            axis=0)[::-1] * scale
-            co = np.int32(np.tanh((sd - 30) / 15) * 5 + 5)
             for ii in range(self.n_chans):
-                self.names[ii].font_size = 12 + co[ii]
-                self.names[ii].color = self.quality_colors[co[ii]]
+                self.names[ii].font_size = 16
 
             self.program['a_position'].set_data(
                 self.band_buffer.T.ravel().astype(np.float32))
@@ -232,6 +218,17 @@ class Canvas(app.Canvas):
 
     def send_osc_message(self, value, name):
         self.sender.send_message('/fund_freq/' + name, value)
+
+    def on_resize(self, event):
+        # Set canvas viewport and reconfigure visual transforms to match.
+        vp = (0, 0, self.physical_size[0], self.physical_size[1])
+        self.context.set_viewport(*vp)
+
+        for ii, t in enumerate(self.names):
+            t.transforms.configure(canvas=self, viewport=vp)
+            t.pos = (self.size[0] * 0.035,  # (self.size[0] * 0.025,
+                     ((ii + 0.5) / 4) * self.size[1])
+            print(t.pos)
 
 
 def view():
