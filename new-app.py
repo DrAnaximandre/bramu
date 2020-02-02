@@ -215,9 +215,6 @@ class Canvas(app.Canvas):
         keep = int(self.window * self.sfreq)
         scores = np.reshape(beta / alpha, (keep, 1))
 
-        # smooth_score = np.mean(scores, axis=0)
-
-        scores = np.ones(shape=(keep, 1))
         smooth_score = np.mean(scores, axis=0)
 
 
