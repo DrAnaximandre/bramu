@@ -81,11 +81,6 @@ void main() {
 CALIBRATION_TIME = 25
 
 """ EXPERIMENTAL PARAMETERS """
-# Modify these to change aspects of the signal processing
-
-# Length of the EEG data buffer (in seconds)
-# This buffer will hold last n seconds of data and be used for calculations
-BUFFER_LENGTH = 10
 
 # Length of the epochs used to compute the FFT (in seconds)
 EPOCH_LENGTH = 1
@@ -117,7 +112,7 @@ class Canvas(app.Canvas):
         # info = self.inlet.info()
         # description = info.desc()
 
-        self.window = 5  # seconds
+        self.window = 3  # seconds
         self.sfreq = 256  # info.nominal_srate()
         self.n_samples = int(self.sfreq * self.window)
         self.n_chans = 4  # info.channel_count()
@@ -162,12 +157,11 @@ class Canvas(app.Canvas):
         """ TEXTS """
         self.band_names = []  # displayed left
         band_names = ["Score", "Delta", "Theta", "Alpha", "Beta"]
-
         self.last_values = []  # displayed right, upper
         self.mean_values = []  # displayed right, lower
 
-        for ii in range(self.n_rows):
-            text = visuals.TextVisual(band_names[ii], bold=True, color='white')
+        for i in range(self.n_rows):
+            text = visuals.TextVisual(band_names[i], bold=True, color='white')
             self.band_names.append(text)
             text = visuals.TextVisual('', bold=True, color='white')
             self.last_values.append(text)
@@ -185,57 +179,68 @@ class Canvas(app.Canvas):
 
     def on_timer(self, event):
 
-        eeg_data, _ = self.inlet.pull_chunk(
-            timeout=1, max_samples=int(SHIFT_LENGTH * self.sfreq))
+        update_lenght = int(SHIFT_LENGTH * self.sfreq)
 
-        if eeg_data:
+        if self.inlet is not None:
+            eeg_data, _ = self.inlet.pull_chunk(
+                timeout=1, max_samples=update_lenght)
 
-            # Only keep the channel we're interested in
-            ch_data = np.array(eeg_data)[:, INDEX_CHANNEL]
-            # Update EEG buffer with the new data
-            self.eeg_buffer, self.filter_state = update_buffer(
-                self.eeg_buffer, ch_data, notch=True,
-                filter_state=self.filter_state)
+        else:
+            eeg_data = np.random.normal(loc=3, size=(update_lenght, 4))
 
-            """ 3.2 COMPUTE BAND POWERS """
-            # Get newest samples from the buffer
-            data_epoch = get_last_data(self.eeg_buffer, int(self.sfreq))
+        # Only keep the channels we're interested in
+        ch_data = np.array(eeg_data)[:, INDEX_CHANNEL]
 
-            # Compute band powers
-            band_powers = compute_band_powers(data_epoch, self.sfreq)
-            self.band_buffer, _ = update_buffer(self.band_buffer,
-                                                np.asarray([band_powers]))
+        # Update EEG buffer with the new data
+        self.eeg_buffer, self.filter_state = update_buffer(
+            self.eeg_buffer, ch_data, notch=True,
+            filter_state=self.filter_state)
 
-            # Compute the average band powers for all epochs in buffer
-            # This helps to smooth out noise
-            smooth_band_powers = np.mean(self.band_buffer, axis=0)
+        # Get one epoch from the buffer
+        epoch_lenght = int(EPOCH_LENGTH * self.sfreq)
+        data_epoch = get_last_data(self.eeg_buffer, epoch_lenght)
 
-            beta = self.band_buffer[:, 3]
-            # add an epsilon to avoid 0 division ...
-            alpha = self.band_buffer[:, 2] + 1e-8
-            keep = int(self.window * self.sfreq)
-            scores = np.reshape(beta / alpha, (keep, 1))
+        # Compute band powers
+        band_powers = compute_band_powers(data_epoch, self.sfreq)
+        self.band_buffer, _ = update_buffer(self.band_buffer,
+                                            np.asarray([band_powers]))
 
-            smooth_score = np.mean(scores, axis=0)
+        # Compute the average band powers for all epochs in buffer
+        # This helps to smooth out noise
+        smooth_band_powers = np.mean(self.band_buffer, axis=0)
 
-            score_and_band_buffer = np.concatenate(
-                (scores, self.band_buffer), axis=1)
+        beta = self.band_buffer[:, 3]
+        # add an epsilon to avoid 0 division ...
+        alpha = self.band_buffer[:, 2] + 1e-8
+        keep = int(self.window * self.sfreq)
+        scores = np.reshape(beta / alpha, (keep, 1))
 
-            last = get_last_data(score_and_band_buffer, 1)
-            print(last)
+        # smooth_score = np.mean(scores, axis=0)
 
-            self.band_names[0].font_size = 16
-            self.last_values[0].text = 'last: %.2f' % (last[0, 0])
-            self.mean_values[0].text = 'mean: %.2f' % (smooth_score)
-            for i in range(self.n_chans):
-                self.band_names[i + 1].font_size = 16
-                self.last_values[i + 1].text = 'last: %.2f' % (last[0, i + 1])
-                self.mean_values[i +
-                                 1].text = 'mean: %.2f' % (smooth_band_powers[i])
+        scores = np.ones(shape=(keep, 1))
+        smooth_score = np.mean(scores, axis=0)
 
-            self.program['a_position'].set_data(
-                score_and_band_buffer.T.ravel().astype(np.float32))
-            self.update()
+
+        score_and_band_buffer = np.concatenate(
+            (scores, self.band_buffer), axis=1)
+
+        print(score_and_band_buffer.shape)
+        last = get_last_data(score_and_band_buffer, 1)
+        print(last)
+        print("-----------")
+
+        self.band_names[0].font_size = 16
+        self.last_values[0].text = 'last: %.2f' % (last[0, 0])
+        self.mean_values[0].text = 'mean: %.2f' % (smooth_score)
+        for i in range(self.n_chans):
+            self.band_names[i + 1].font_size = 16
+            self.last_values[i + 1].text = 'last: %.2f' % (last[0, i + 1])
+            self.mean_values[i +
+                             1].text = 'mean: %.2f' % (smooth_band_powers[i])
+
+        self.program['a_position'].set_data(
+            score_and_band_buffer.T.ravel().astype(np.float32))
+        self.update()
 
     def on_draw(self, event):
         gloo.clear()
@@ -251,20 +256,21 @@ class Canvas(app.Canvas):
         vp = (0, 0, self.physical_size[0], self.physical_size[1])
         self.context.set_viewport(*vp)
 
-        for ii, t in enumerate(self.band_names):
+        for i, t in enumerate(self.band_names):
             t.transforms.configure(canvas=self, viewport=vp)
             t.pos = (self.size[0] * 0.035,
-                     ((ii + 0.5) / self.n_rows) * self.size[1])
+                     ((self.n_rows - (i + 0.5)) / self.n_rows) * self.size[1])
 
-        for ii, t in enumerate(self.last_values):
+        # displayed right, upper
+        for i, t in enumerate(self.last_values):
             t.transforms.configure(canvas=self, viewport=vp)
             t.pos = (self.size[0] * 0.95,
-                     ((ii + 0.45) / self.n_rows) * self.size[1])
-
-        for ii, t in enumerate(self.mean_values):
+                     ((self.n_rows - (i + 0.45)) / self.n_rows) * self.size[1])
+        # displayed right, lower
+        for i, t in enumerate(self.mean_values):
             t.transforms.configure(canvas=self, viewport=vp)
             t.pos = (self.size[0] * 0.95,
-                     ((ii + 0.55) / self.n_rows) * self.size[1])
+                     ((self.n_rows - (i + 0.55)) / self.n_rows) * self.size[1])
 
 
 def main():
@@ -272,13 +278,15 @@ def main():
     sender = udp_client.SimpleUDPClient('127.0.0.1', 4559)
 
     print("Looking for an EEG stream...")
-    streams = resolve_byprop('type', 'EEG', timeout=10)
+    streams = resolve_byprop('type', 'EEG', timeout=1)
 
     if len(streams) == 0:
-        raise(RuntimeError("Can't find EEG stream."))
-    print("Start acquiring data.")
+        print("Can't find EEG stream.")
+        inlet = None
+    else:
+        print("Start acquiring data.")
+        inlet = StreamInlet(streams[0], max_chunklen=12)
 
-    inlet = StreamInlet(streams[0], max_chunklen=12)
     Canvas(inlet, sender)
     app.run()
 

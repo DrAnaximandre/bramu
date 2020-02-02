@@ -118,6 +118,7 @@ def get_last_data(data_buffer, newest_samples):
     Obtains from "buffer_array" the "newest samples" (N rows from the
     bottom of the buffer)
     """
+
     new_buffer = data_buffer[(data_buffer.shape[0] - newest_samples):, :]
 
     return new_buffer

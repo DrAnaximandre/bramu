@@ -18,9 +18,6 @@ from pythonosc import udp_client  # Module for OSC
 import time  # time module for timing calibration
 
 
-# Handy little enum to make code more readable
-
-
 class Band:
     Delta = 0
     Theta = 1
@@ -124,7 +121,8 @@ if __name__ == "__main__":
             calibration_smoothed_beta.append(smooth_band_powers[Band.Beta])
             current_time = time.time()
 
-        score_calibration = np.array(calibration_smoothed_beta) / np.array(calibration_smoothed_alpha)
+        score_calibration = np.array(
+            calibration_smoothed_beta) / np.array(calibration_smoothed_alpha)
         mean_score_calibration = np.mean(score_calibration)
         std_score_calibration = np.std(score_calibration)
 
@@ -147,7 +145,8 @@ if __name__ == "__main__":
             beta = smooth_band_powers[Band.Beta]
             # Computes the ratio, the calibrated ratio and their sigmoid
             score = beta / alpha
-            score_calibrated = (score-mean_score_calibration) / std_score_calibration
+            score_calibrated = (
+                score - mean_score_calibration) / std_score_calibration
             sig_score = utils.sigmoid(score)
             sig_score_calibrated = utils.sigmoid(score_calibrated)
 
@@ -156,7 +155,6 @@ if __name__ == "__main__":
             send_osc_message(str(sig_score), "sig_score")
             send_osc_message(str(score_calibrated), "score_calibrated")
             send_osc_message(str(sig_score_calibrated), "sig_score_calibrated")
-
 
     except KeyboardInterrupt:
         print('Closing!')
