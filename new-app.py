@@ -112,7 +112,7 @@ class Canvas(app.Canvas):
         # info = self.inlet.info()
         # description = info.desc()
 
-        self.window = 3  # seconds
+        self.window = 10  # seconds
         self.sfreq = 256  # info.nominal_srate()
         self.n_samples = int(self.sfreq * self.window)
         self.n_chans = 4  # info.channel_count()
@@ -217,14 +217,10 @@ class Canvas(app.Canvas):
 
         smooth_score = np.mean(scores, axis=0)
 
-
         score_and_band_buffer = np.concatenate(
             (scores, self.band_buffer), axis=1)
 
-        print(score_and_band_buffer.shape)
         last = get_last_data(score_and_band_buffer, 1)
-        print(last)
-        print("-----------")
 
         self.band_names[0].font_size = 16
         self.last_values[0].text = 'last: %.2f' % (last[0, 0])
