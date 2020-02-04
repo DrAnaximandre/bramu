@@ -275,6 +275,7 @@ def main():
 
     if len(streams) == 0:
         print("Can't find EEG stream.")
+        print("Streaming fake data for visualisation purpose")
         inlet = None
     else:
         print("Start acquiring data.")
