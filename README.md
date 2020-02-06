@@ -40,6 +40,8 @@ The core Python code was adapted from https://github.com/alexandrebarachant/muse
  - You should use `muse-windows.py`
  - `new-app.py` provides visualisation but does not have a calibration time and does not send OSC messages yet.
 
+![alt text](new-vis.png "Visualisation of `new-app.py`")
+
 
 ## License
 [MIT](https://choosealicense.com/licenses/mit/)
