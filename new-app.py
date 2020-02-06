@@ -103,7 +103,7 @@ class Canvas(app.Canvas):
                  lsl_inlet,
                  osc_sender):
 
-        app.Canvas.__init__(self, title='test',
+        app.Canvas.__init__(self, title='Visualisation - Experimental',
                             keys='interactive')
 
         self.inlet = lsl_inlet
