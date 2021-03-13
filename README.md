@@ -20,8 +20,12 @@ This repo deals with:
 
 Python 3.7 +
 - `numpy`
+- `vispy` (advised to install via conda: `conda install -c conda-forge vispy
+`)
+- a backend for `vispy` (recommended: `pyqt`, via conda)
 - `pylsl`
-- `pythonosc`
+- `python-osc`
+- `seaborn`
 
 Sonic Pi 3.1 +
 
